@@ -9,8 +9,8 @@ import { header_X_Signed_Identity, signedAuthHeader } from './auth';
 
 export const app = express();
 
-app.use(express.json); // Make sure to use express.json middleware to parse json request body
-app.use(express.text); // Make sure to use express.text middleware to parse text request body
+app.use(express.json()); // Make sure to use express.json middleware to parse json request body
+app.use(express.text()); // Make sure to use express.text middleware to parse text request body
 
 // Constants for URL options
 const stage_rest_url: { [key: string]: string } = {
@@ -24,6 +24,8 @@ const grooming_timer_interval = `timer/interval`;
 const local_admin_email = "root@localhost";
 
 app.post("/groom", async (req: Request, res: Response) => {
+
+    console.log('Grooming request received');
 
     try {
         logRequest(req);
@@ -50,12 +52,15 @@ app.post("/groom", async (req: Request, res: Response) => {
 
         console.log('Grooming successful');
 
+        const responseData = await response.json();
+
         return res
             .status(HTTP_SUCCESS)
-            .contentType("text/json")
-            .send(response);
+            .contentType("application/json")
+            .send(responseData);
+
     } catch (error) {
-        return handleErrorResponse(error, req, res);
+        return handleErrorResponse(error, req, res, "Grooming failed");
     }
 });
 
