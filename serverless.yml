@@ -11,15 +11,6 @@ provider:
   iam:
     role:
       statements:
-        - Effect: Allow
-          Action:
-            - dynamodb:Query
-            - dynamodb:Scan
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-            - dynamodb:UpdateItem
-            - dynamodb:DeleteItem
-          Resource: "arn:aws:dynamodb:us-west-2:*:table/${self:provider.environment.DYNAMO_DB_ANALYSIS}"
         - Effect: "Allow"
           Action:
             - secretsmanager:GetSecretValue
@@ -38,3 +29,8 @@ functions:
 
 plugins:
   - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 4000
+    lambdaPort: 4001 # Specify a different port for Lambda simulation
