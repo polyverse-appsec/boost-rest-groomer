@@ -1,0 +1,40 @@
+service: boost-rest-groomer
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}  # Use the stage specified in the command line, default to 'dev'
+  region: us-west-2
+  environment:
+    APP_VERSION: ${file(./package.json):version}
+    DEPLOYMENT_STAGE: "${self:provider.stage}"
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: "arn:aws:dynamodb:us-west-2:*:table/${self:provider.environment.DYNAMO_DB_ANALYSIS}"
+        - Effect: "Allow"
+          Action:
+            - secretsmanager:GetSecretValue
+          Resource: "arn:aws:secretsmanager:us-west-2:*:secret:*"
+  httpApi:
+    cors: true
+
+functions:
+  api:
+    handler: build/index.handler
+    timeout: 29 # Lambda supports 15 minutes (900 seconds), but Serverless HTTP API only 30 seconds
+    events:
+      - httpApi: '*'
+    url:
+      invokeMode: RESPONSE_STREAM
+
+plugins:
+  - serverless-offline
