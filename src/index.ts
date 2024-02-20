@@ -28,12 +28,12 @@ app.post("/groom", async (req: Request, res: Response) => {
     try {
         logRequest(req);
 
-        if (!process.env.STAGE) {
+        if (!process.env.DEPLOYMENT_STAGE) {
             return handleErrorResponse(new Error("STAGE environment variable not set"), req, res);
         }
 
         // get the string from the rest url map, based on process.env.STAGE
-        const this_stage_url : string = stage_rest_url[process.env.STAGE.toLocaleLowerCase()]; 
+        const this_stage_url : string = stage_rest_url[process.env.DEPLOYMENT_STAGE.toLocaleLowerCase()]; 
 
         const response = await fetch(`${this_stage_url}/${grooming_timer_interval}`, {
             method: 'POST',

@@ -6,7 +6,7 @@ Polyverse Boost ReST Groomer
 ## Version 0.1.0: February 20th, 2024
 
 ### New Features
-- N/A
+- Add new /groom endpoint to enable automated calling on AWS interval
 
 ### Enhancements
 - N/A
