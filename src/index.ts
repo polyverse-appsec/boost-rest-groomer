@@ -12,6 +12,10 @@ export const app = express();
 app.use(express.json()); // Make sure to use express.json middleware to parse json request body
 app.use(express.text()); // Make sure to use express.text middleware to parse text request body
 
+if (process.env.IS_OFFLINE) {
+    process.env.DEPLOYMENT_STAGE = "local";
+}
+
 // Constants for URL options
 const stage_rest_url: { [key: string]: string } = {
     "local": "http://localhost:3000",
@@ -20,7 +24,7 @@ const stage_rest_url: { [key: string]: string } = {
     "prod": "https://33pdosoitl22c42c7sf46tabi40qwlae.lambda-url.us-west-2.on.aws"
 }
 
-const grooming_timer_interval = `timer/interval`;
+const grooming_timer_interval = `api/timer/interval`;
 const local_admin_email = "root@localhost";
 
 app.post("/groom", async (req: Request, res: Response) => {
@@ -43,7 +47,7 @@ app.post("/groom", async (req: Request, res: Response) => {
                 'Content-Type': 'application/json',
                 [header_X_Signed_Identity]: (await signedAuthHeader(local_admin_email))[header_X_Signed_Identity]
             },
-            body: JSON.stringify({ "interval": 5 })
+            body: JSON.stringify({ "interval": process.env.GROOMING_INTERVAL?parseInt(process.env.GROOMING_INTERVAL):0 })
         });
 
         if (!response.ok) {
@@ -52,11 +56,11 @@ app.post("/groom", async (req: Request, res: Response) => {
 
         console.log('Grooming successful');
 
-        const responseData = await response.json();
+        const responseData = await response.text();
 
         return res
             .status(HTTP_SUCCESS)
-            .contentType("application/json")
+            .contentType("text/plain")
             .send(responseData);
 
     } catch (error) {
