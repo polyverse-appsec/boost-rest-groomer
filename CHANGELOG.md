@@ -3,6 +3,17 @@ Polyverse Boost ReST Groomer
 
 # Release Notes
 
+## Version 0.1.1: March 11th, 2024
+
+### New Features
+- Add authentication/authorization verification (to prevent external clients from accessing Grooming monitor)
+
+### Enhancements
+- Improved logging and error handling in dispatch
+
+### Bug Fixes
+- N/A
+
 ## Version 0.1.0: March 11th, 2024
 
 ### New Features

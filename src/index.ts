@@ -4,8 +4,8 @@ import process from 'process';
 
 import serverless from 'serverless-http';
 
-import { logRequest, handleErrorResponse, HTTP_SUCCESS } from './utility/dispatch';
-import { header_X_Signed_Identity, signedAuthHeader } from './auth';
+import { handleErrorResponse, HTTP_SUCCESS } from './utility/dispatch';
+import { AuthType, header_X_Signed_Identity, signedAuthHeader, validateUser } from './auth';
 
 export const app = express();
 
@@ -29,10 +29,11 @@ const local_admin_email = "root@localhost";
 
 app.post("/groom", async (req: Request, res: Response) => {
 
-    console.log('Grooming request received');
-
     try {
-        logRequest(req);
+        const email = await validateUser(req, res, AuthType.Admin);
+        if (!email) {
+            return;
+        }
 
         if (!process.env.DEPLOYMENT_STAGE) {
             return handleErrorResponse(new Error("STAGE environment variable not set"), req, res);
