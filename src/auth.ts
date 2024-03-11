@@ -1,14 +1,10 @@
 import { Request, Response } from 'express';
-
 import * as jwt from 'jsonwebtoken';
-
 import { getSingleSecret } from './secrets';
-
-import { HTTP_FAILURE_UNAUTHORIZED } from './utility/dispatch';
+import { HTTP_FAILURE_UNAUTHORIZED, logRequest } from './utility/dispatch';
 
 export const header_X_Signed_Identity = 'X-Signed-Identity';
 export const header_X_Signing_Algorithm = 'X-Signing-Algorithm';
-
 export const local_sys_admin_email = "root@localhost";
 
 interface RawIdentity {
@@ -22,8 +18,9 @@ export enum AuthType {
     Admin
 }
 
-export async function validateUser(req: Request, res: Response, accessType: AuthType = AuthType.User): Promise<string | undefined> {
+export async function validateUser(req: Request, res: Response, accessType: AuthType = AuthType.User, throwIfNotAuthorized : boolean = false): Promise<string | undefined> {
     let email = '';
+
     // if the identity of the caller is signed, we need to verify AuthN
     //   - we'll get the signed identity blob (base-64 encoded JWT)
     //   - we'll get the signing key (base-64 encoded public key)
@@ -31,27 +28,22 @@ export async function validateUser(req: Request, res: Response, accessType: Auth
     //   - we'll use the signing key and algorithm to verify the signature of the identity blob
     //   - we'll decode the identity blob to get the email address
 
-    // we need to look for any cased variant of x-signed-identity in the header
-    const signedIdentityHeader = Object.keys(req.headers).find(key => key.toLowerCase() === header_X_Signed_Identity.toLowerCase());
-    if (signedIdentityHeader) {
-        let signingKey = process.env.JWT_SIGNING_KEY;
+    // Try to extract the identity token from the Authorization header or X-Signed-Identity
+    let identityJWT: string | undefined = getSignedIdentityFromHeader(req);
+
+    if (identityJWT) {
+        let signingKey = process.env.JWT_SIGNING_KEY || await getSingleSecret('boost-sara/sara-client-public-key');
         if (!signingKey) {
-            signingKey = await getSingleSecret('boost-sara/sara-client-public-key');
-        }
-        if (!signingKey) {
-            console.error(`Unauthorized: Signing key is required`);
+            console.error(`${req.method} ${req.originalUrl} Unauthorized: Signing key is required`);
+            if (throwIfNotAuthorized) {
+                throw new Error(`Unauthorized`);
+            }
             res.status(HTTP_FAILURE_UNAUTHORIZED).send('Unauthorized');
             return undefined;
         }
-    
+
         const signedAlgorithmHeader = Object.keys(req.headers).find(key => key.toLowerCase() === header_X_Signing_Algorithm.toLowerCase());
-        let signingAlgorithm = signedAlgorithmHeader?req.headers[signedAlgorithmHeader] as jwt.Algorithm:undefined;
-        if (!signingAlgorithm) {
-            signingAlgorithm = 'RS256';
-        }
-    
-        // Extract the JWT from the identity blob
-        const identityJWT = req.headers[signedIdentityHeader] as string;
+        let signingAlgorithm = signedAlgorithmHeader ? req.headers[signedAlgorithmHeader] as jwt.Algorithm : 'RS256';
 
         // Verify the JWT signature directly
         try {
@@ -59,14 +51,20 @@ export async function validateUser(req: Request, res: Response, accessType: Auth
     
             // Check the expiration
             if (identity.expires && identity.expires < (Date.now() / 1000)) {
-                console.error(`Unauthorized: Signed identity expired`);
+                console.error(`${req.method} ${req.originalUrl} Unauthorized: Signed identity expired`);
+                if (throwIfNotAuthorized) {
+                    throw new Error(`Unauthorized`);
+                }
                 res.status(HTTP_FAILURE_UNAUTHORIZED).send('Unauthorized');
                 return undefined;
             }
 
             email = normalizeEmail(identity.email);
         } catch (err) {
-            console.error(`Unauthorized: Invalid signed identity: ${err} - Identity Header: ${identityJWT}`);
+            console.error(`${req.method} ${req.originalUrl} Unauthorized: Invalid signed identity: ${err} - Identity Header: ${identityJWT}`);
+            if (throwIfNotAuthorized) {
+                throw new Error(`Unauthorized`);
+            }
             res.status(HTTP_FAILURE_UNAUTHORIZED).send('Unauthorized');
             return undefined;
         }
@@ -76,17 +74,23 @@ export async function validateUser(req: Request, res: Response, accessType: Auth
     if (!email) {
         const userAccountHeader = Object.keys(req.headers).find(key => key.toLowerCase() === 'x-user-account');
         if (!userAccountHeader || !req.headers[userAccountHeader]) {
-            console.error(`Unauthorized: Email is required`);
+            console.error(`${req.method} ${req.originalUrl} Unauthorized: Email is required`);
+            if (throwIfNotAuthorized) {
+                throw new Error(`Unauthorized`);
+            }
             res.status(HTTP_FAILURE_UNAUTHORIZED).send('Unauthorized');
             return undefined;
         }
         // only support this header if we are running locally and not in AWS / Cloud
         if (!process.env.ENABLE_UNSIGNED_AUTHN) {
-            console.error(`Unauthorized: UNSIGNED_AUTHN is not enabled; set ENABLE_UNSIGNED_AUTHN=true to enable`);
+            console.error(`${req.method} ${req.originalUrl} Unauthorized: UNSIGNED_AUTHN is not enabled; set ENABLE_UNSIGNED_AUTHN=true to enable`);
+            if (throwIfNotAuthorized) {
+                throw new Error(`Unauthorized`);
+            }
             res.status(HTTP_FAILURE_UNAUTHORIZED).send('Unauthorized');
             return undefined;
         } else {
-            console.warn(`ENABLE_UNSIGNED_AUTHN is enabled; BUT MOST APIs will NOT work with this user authentication model, since most APIs use identity delegation`);
+            console.warn(`${req.method} ${req.originalUrl} ENABLE_UNSIGNED_AUTHN is enabled; BUT MOST APIs will NOT work with this user authentication model, since most APIs use identity delegation`);
         }
         
         email = req.headers[userAccountHeader] as string;
@@ -96,18 +100,22 @@ export async function validateUser(req: Request, res: Response, accessType: Auth
     email = normalizeEmail(email);
 
     if (process.env.TRACE_LEVEL) {
-        console.log(`User authenticated: ${email}`);
+        console.log(`${req.method} ${req.originalUrl} User authenticated: ${email}`);
     }
     
-    // if admin access is required, then verify the domain is coming from polyverse.com
     if (accessType === AuthType.Admin) {
         if (email !== local_sys_admin_email) {
-            console.error(`Unauthorized: Admin access is required`);
+            console.error(`${req.method} ${req.originalUrl} Unauthorized: Admin access is required`);
+            if (throwIfNotAuthorized) {
+                throw new Error(`Unauthorized`);
+            }
             res.status(HTTP_FAILURE_UNAUTHORIZED).send('Unauthorized');
             return undefined;
         }
-        console.log(`Admin access granted: ${email}`);
+        console.log(`${req.method} ${req.originalUrl} Admin access granted: ${email}`);
     }
+
+    logRequest(req, email);
 
     return email;
 }
@@ -120,10 +128,7 @@ function normalizeEmail(email: string): string {
 }
 
 export async function signedAuthHeader(email: string, organization?: string): Promise<{ [key: string]: string }> {
-    let signingKey = process.env.JWT_SIGNING_KEY;
-    if (!signingKey) {
-        signingKey = await getSingleSecret('boost-sara/sara-client-private-key');
-    }
+    let signingKey = process.env.JWT_SIGNING_KEY || await getSingleSecret('boost-sara/sara-client-private-key');
     if (!signingKey) {
         throw new Error(`Signing key is required`);
     }
@@ -137,21 +142,23 @@ export async function signedAuthHeader(email: string, organization?: string): Pr
         unsignedIdentity.organization = organization;
     }
 
-    // if the domain of the email is polyverse.com then change it to polytest.ai
-    // use a regex to replace the domain case insensitive
     const signedToken = jwt.sign(unsignedIdentity, signingKey, { algorithm: 'RS256' });
-    return { [header_X_Signed_Identity]: signedToken}
+    return { [header_X_Signed_Identity]: signedToken };
 }
 
 export function getSignedIdentityFromHeader(req: Request): string | undefined {
-    // we need to look for any cased variant of x-signed-identity in the header
-    const signedIdentityHeader = Object.keys(req.headers).find(key => key.toLowerCase() === header_X_Signed_Identity.toLowerCase());
-    if (!signedIdentityHeader) {
-        return undefined;
+    const bearerToken = extractBearerToken(req);
+    if (bearerToken) {
+        return bearerToken;
     }
+    const signedIdentityHeader = Object.keys(req.headers).find(key => key.toLowerCase() === header_X_Signed_Identity.toLowerCase());
+    return signedIdentityHeader ? req.headers[signedIdentityHeader] as string : undefined;
+}
 
-    // Extract the JWT from the identity blob
-    const identityJWT = req.headers[signedIdentityHeader] as string;
-
-    return identityJWT;
+function extractBearerToken(req: Request): string | undefined {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.substring(7);
+    }
+    return undefined;
 }
