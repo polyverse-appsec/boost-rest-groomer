@@ -55,9 +55,9 @@ app.post("/groom", async (req: Request, res: Response) => {
             return handleErrorResponse(new Error(`Failed to groom: ${response.statusText}`), req, res);
         }
 
-        console.log('Grooming successful');
-
         const responseData = await response.text();
+
+        console.log(`Grooming successful: ${responseData}`);
 
         return res
             .status(HTTP_SUCCESS)

@@ -42,6 +42,8 @@ const apiSaraBoostGroomingCycle = async function () {
             log.info(`Response Status Code: ${response.statusCode}`);
             log.info(`Response Headers: ${JSON.stringify(response.headers)}`);
 
+            log.debug(`Response: ${JSON.stringify(response.responseBody)}`);
+
             let responseBody = '';
             response.on('data', (d) => {
                 responseBody += d;
