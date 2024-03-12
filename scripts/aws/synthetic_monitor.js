@@ -43,20 +43,54 @@ const apiSaraBoostGroomingCycle = async function () {
             log.info(`Response Headers: ${JSON.stringify(response.headers)}`);
 
             log.debug(`Response: ${JSON.stringify(response.responseBody)}`);
+            log.debug(`Response Keys: ${Object.keys(response)}`);
 
             let responseBody = '';
             response.on('data', (d) => {
-                responseBody += d;
+                const chunkAsString = d.toString('utf-8'); // Convert Buffer to string
+                log.info(`Chunk: ${chunkAsString}`);
+                responseBody += chunkAsString;
             });
 
             response.on('end', () => {
-                // Log the response body for further diagnostics
-                log.info('Response body: ' + responseBody);
-                
+                log.info('Raw Response: ' + responseBody);
+
                 // Check for successful response status codes
                 if (response.statusCode < 200 || response.statusCode > 299) {
                     reject(new Error(`${response.statusCode} ${response.statusMessage}`));
                 } else {
+                    if (response.headers['content-type'] && response.headers['content-type'].includes('application/json')) {
+                        try {
+                            const bodyAsJson = JSON.parse(responseBody);
+                            log.info('Parsed JSON Body:', JSON.stringify(bodyAsJson));
+                        } catch (error) {
+                            log.error('Failed to parse response body as JSON:', error);
+                        }
+                    }
+                    resolve();
+                }
+            });
+
+            response.on('end', () => {
+                // Log the response body for further diagnostics
+                log.info('Raw Response: ' + responseBody);
+
+                // Check for successful response status codes
+                if (response.statusCode < 200 || response.statusCode > 299) {
+                    reject(new Error(`${response.statusCode} ${response.statusMessage}`));
+                } else {
+                    if (response.body !== undefined) {
+                        if (response['content-type']) {
+                            if (response['content-type'].includes('application/json')) {
+                                let body = JSON.parse(response.body);
+                                log.info('Response body (JSON): ' + JSON.stringify(body));
+                            } else if (response['content-type'].includes('text/plain')) {
+                                log.info('Response body (Text): ' + response.body);
+                            }
+                        } else {
+                            log.info('Response body: ' + response.body);
+                        }
+                    }
                     resolve();
                 }
             });
