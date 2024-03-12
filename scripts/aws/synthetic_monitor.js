@@ -35,62 +35,57 @@ const apiSaraBoostGroomingCycle = async function () {
         "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InJvb3RAbG9jYWxob3N0In0.bnetk9Voy2YE2ssI0ihwI8gWlHu3NVb24WL1uiL0fLxLmVxG3uU6TVazo3Bgu4N88FCKyG0Poz7JpaFkySOuCW2aEcrhBjkhEeP4iixMCQ-geyBnK6dJiQRadlQYle_Uvi30-_jCNSGIP48MUqo9xr5RJ7jPNDws2ZB2Dnkl5PhviyIVPaUqNdZdocZrVO_CCTvmauP8IiXHVI6GA2M_FloLboiTi_5U0ZlGSog2HgYK3JCYAi9nyIEFENBmaqwwyHa6s7qMFebAuJ-OG9s5qM2glflRVPkbVy_Xck4DDbw1yd2qwlxqqmkr-Ab0vAX-aeG9UoiQa-jeeeIiuVxR1g"
     };
 
-    // Diagnostic validation function
+    // Http Request validation function
     const validateSuccessful = async function (response) {
         return new Promise((resolve, reject) => {
-            // Immediately log response status code and headers for diagnostics
-            log.info(`Response Status Code: ${response.statusCode}`);
-            log.info(`Response Headers: ${JSON.stringify(response.headers)}`);
-
-            log.debug(`Response: ${JSON.stringify(response.responseBody)}`);
-            log.debug(`Response Keys: ${Object.keys(response)}`);
-
             let responseBody = '';
             response.on('data', (d) => {
                 const chunkAsString = d.toString('utf-8'); // Convert Buffer to string
-                log.info(`Chunk: ${chunkAsString}`);
+                log.debug(`Chunk: ${chunkAsString}`);
                 responseBody += chunkAsString;
             });
 
             response.on('end', () => {
-                log.info('Raw Response: ' + responseBody);
 
-                // Check for successful response status codes
-                if (response.statusCode < 200 || response.statusCode > 299) {
-                    reject(new Error(`${response.statusCode} ${response.statusMessage}`));
-                } else {
-                    if (response.headers['content-type'] && response.headers['content-type'].includes('application/json')) {
-                        try {
-                            const bodyAsJson = JSON.parse(responseBody);
-                            log.info('Parsed JSON Body:', JSON.stringify(bodyAsJson));
-                        } catch (error) {
-                            log.error('Failed to parse response body as JSON:', error);
-                        }
-                    }
-                    resolve();
-                }
-            });
+                log.info(`Response Status Code: ${response.statusCode}`);
+                log.debug(`Response Headers: ${JSON.stringify(response.headers)}`);
 
-            response.on('end', () => {
                 // Log the response body for further diagnostics
-                log.info('Raw Response: ' + responseBody);
+                log.debug(`Raw Response ${typeof responseBody}: ${responseBody}`);
 
                 // Check for successful response status codes
                 if (response.statusCode < 200 || response.statusCode > 299) {
+                    console.error(`Response Failure Status: ${response.statusCode} ${response.statusMessage}`);
                     reject(new Error(`${response.statusCode} ${response.statusMessage}`));
                 } else {
-                    if (response.body !== undefined) {
-                        if (response['content-type']) {
-                            if (response['content-type'].includes('application/json')) {
-                                let body = JSON.parse(response.body);
-                                log.info('Response body (JSON): ' + JSON.stringify(body));
-                            } else if (response['content-type'].includes('text/plain')) {
-                                log.info('Response body (Text): ' + response.body);
-                            }
+                    let responseToValidate;
+                    try {
+                        // Parse the complete response body to get the outer JSON object
+                        const outerResponse = JSON.parse(responseBody);
+                
+                        // Check if the outer response has a 'body' property that is a string
+                        if (outerResponse.body && typeof outerResponse.body === 'string') {
+                            // Parse the inner JSON string
+                            const innerResponse = JSON.parse(outerResponse.body);
+                            log.debug('Inner Response (Embedded JSON):', JSON.stringify(innerResponse));
+
+                            // log the body of the inner response
+                            log.info('Response body (JSON):', innerResponse.body);
+                            responseToValidate = innerResponse.body;
+
                         } else {
-                            log.info('Response body: ' + response.body);
+                            // Handle cases where the body is not a JSON-encoded string
+                            log.info('Response body (JSON):', outerResponse.body);
+                            responseToValidate = outerResponse.body;
                         }
+                    } catch (error) {
+                        log.warning('Failed to parse response body as JSON:', error);
+                        log.info('Response body (RAW HTTP): ' + response.body);
+                        responseToValidate = response.body;
                     }
+
+                    // validate the responseToValidate and either resolve or reject the promise
+
                     resolve();
                 }
             });
