@@ -36,7 +36,7 @@ const apiSaraBoostGroomingCycle = async function () {
     };
 
     // Http Request validation function
-    const validateSuccessful = async function (response) {
+    const validateSuccessful = async function (response, validateHttpResponse) {
         return new Promise((resolve, reject) => {
             let responseBody = '';
             response.on('data', (d) => {
@@ -45,7 +45,7 @@ const apiSaraBoostGroomingCycle = async function () {
                 responseBody += chunkAsString;
             });
 
-            response.on('end', () => {
+            response.on('end', async () => {
 
                 log.info(`Response Status Code: ${response.statusCode}`);
                 log.debug(`Response Headers: ${JSON.stringify(response.headers)}`);
@@ -67,7 +67,7 @@ const apiSaraBoostGroomingCycle = async function () {
                         if (outerResponse.body && typeof outerResponse.body === 'string') {
                             // Parse the inner JSON string
                             const innerResponse = JSON.parse(outerResponse.body);
-                            log.debug('Inner Response (Embedded JSON):', JSON.stringify(innerResponse));
+                            console.debug('Inner Response (Embedded JSON):', JSON.stringify(innerResponse));
 
                             // log the body of the inner response
                             log.info('Response body (JSON):', innerResponse.body);
@@ -79,14 +79,21 @@ const apiSaraBoostGroomingCycle = async function () {
                             responseToValidate = outerResponse.body;
                         }
                     } catch (error) {
-                        log.warning('Failed to parse response body as JSON:', error);
+                        console.warn(`Failed to parse response body (${responseBody}) as JSON:`, error);
                         log.info('Response body (RAW HTTP): ' + response.body);
                         responseToValidate = response.body;
                     }
 
-                    // validate the responseToValidate and either resolve or reject the promise
-
-                    resolve();
+                    if (validateHttpResponse === undefined) {
+                        log.info('No validation function provided. Skipping validation.');
+                        resolve();
+                    } else {
+                        if (await validateHttpResponse(responseToValidate)) {
+                            resolve();
+                        } else {
+                            reject(new Error('Validation failed.'));
+                        }
+                    }
                 }
             });
         });
@@ -142,13 +149,22 @@ const apiSaraBoostGroomingCycle = async function () {
         'port': 443,
         'protocol': 'https:',
         'headers': headers,
-    };
-    
+    };    
     log.info("Groom Step Parameters: " + JSON.stringify(groomParams));
+
+    const validateGroomerResponse = async (response) => {
+        if (response.startsWith(`Timer HTTP POST Ack:`)) {
+            log.info(`Groomer responded as expected: ${response}`);
+             return true;
+        } else {
+            console.error(`Groomer did not respond as expected: ${response}`);
+            return false;
+        }
+    };
 
     // Execute the HTTP request with detailed diagnostics
     try {
-        await synthetics.executeHttpStep('Grooming Interval Information', groomParams, validateSuccessful);
+        await synthetics.executeHttpStep('Grooming Interval Information', groomParams, (response) => validateSuccessful(response, validateGroomerResponse));
     } catch (error) {
         // Log any errors encountered during the request execution
         log.error('Sara/Boost (REST Backend) Grooming Interval failed:', error);
