@@ -4,7 +4,7 @@ const synthetics = require('Synthetics');
 const log = require('SyntheticsLogger');
 const syntheticsConfiguration = synthetics.getConfiguration();
 
-const target_rest_server_dev = 'a2udbyp6zqjb3ha6oaqpaxygpq0vdoqy';
+const target_rest_server_dev = 'e22ksqihwjm3chxizytehhluee0jckbd';
 const target_rest_server_test = 'gbtt7kksisljk7vpnl7u6rw55y0kqzmy';
 const target_rest_server_prod = 'kr5gaaagth4sjoz2jl4ujtjfum0eqzpe';
 const target_rest_host_region = '.lambda-url.us-west-2.on.aws';

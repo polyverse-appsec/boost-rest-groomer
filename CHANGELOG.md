@@ -3,6 +3,17 @@ Polyverse Boost ReST Groomer
 
 # Release Notes
 
+## Version 0.2.1: April 24th, 2024
+
+### New Features
+- N/A
+
+### Enhancements
+- N/A
+
+### Bug Fixes
+- Update Backend Service API (Dev)
+
 ## Version 0.2.0: March 11th, 2024
 
 ### New Features
